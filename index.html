@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Diary</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="My Diary">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FFFBF2">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<style>
+  html,body{margin:0;height:100%;background:#FFFBF2;color:#2B2560;font-family:system-ui,-apple-system,sans-serif}
+  body{background-image:radial-gradient(rgba(43,37,96,.08) 1.2px,transparent 1.5px);background-size:20px 20px}
+  #boot{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;box-sizing:border-box}
+  #boot img{width:96px;height:96px;animation:bob 1.2s ease-in-out infinite}
+  #boot p{margin:0;font-size:16px;font-weight:600}
+  #boot small{color:#6A6389;font-size:13px;max-width:280px;line-height:1.5}
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-8px) rotate(4deg)}}
+</style>
+</head>
+<body>
+<div id="boot"><img src="icon-512.png" alt=""><p id="boot-msg">Opening my diary...</p><small id="boot-sub"></small></div>
+<script>
+(function () {
+  // ---- small helpers -------------------------------------------------
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function say(msg, sub) {
+    var m = document.getElementById('boot-msg'), s = document.getElementById('boot-sub');
+    if (m) m.textContent = msg;
+    if (s) s.textContent = sub || '';
+  }
+
+  // ---- read my personal link: ...#id=DEPLOYMENT_ID&k=SECRET_KEY -------
+  // The part after # never leaves the phone, so the key is not sent to GitHub.
+  var hash = {};
+  location.hash.replace(/^#/, '').split('&').forEach(function (part) {
+    var i = part.indexOf('=');
+    if (i > 0) hash[decodeURIComponent(part.slice(0, i))] = decodeURIComponent(part.slice(i + 1));
+  });
+  var id = hash.id || lsGet('pos_id');
+  var key = hash.k || lsGet('pos_key');
+  if (hash.id) lsSet('pos_id', hash.id);
+  if (hash.k) lsSet('pos_key', hash.k);
+  if (!id || !key) {
+    say('This page needs my personal link.', 'Open the link with #id=...&k=... once, then add it to the home screen.');
+    return;
+  }
+  var API = 'https://script.google.com/macros/s/' + id + '/exec';
+
+  function post(fn, args) {
+    // text/plain keeps this a "simple" request, so Google accepts it from another website.
+    return fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: key, fn: fn, args: args || [] })
+    }).then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.ok) throw new Error((j && j.error) || 'Something went wrong');
+        return j.result;
+      });
+  }
+
+  // ---- stand-in for google.script.run, so the page code needs no change ----
+  var SHIM = '(function(){' +
+    'var API=' + JSON.stringify(API) + ',KEY=' + JSON.stringify(key) + ';' +
+    'function post(fn,args){return fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},' +
+    'body:JSON.stringify({key:KEY,fn:fn,args:args||[]})}).then(function(r){return r.json();}).then(function(j){' +
+    'if(!j||!j.ok)throw new Error((j&&j.error)||"Something went wrong");return j.result;});}' +
+    'function mk(h){return new Proxy({},{get:function(_,name){' +
+    'if(name==="withSuccessHandler")return function(f){return mk({ok:f,fail:h.fail});};' +
+    'if(name==="withFailureHandler")return function(f){return mk({ok:h.ok,fail:f});};' +
+    'if(name==="withUserObject")return function(){return mk(h);};' +
+    'return function(){var args=[].slice.call(arguments);post(name,args).then(function(r){if(h.ok)h.ok(r);},' +
+    'function(e){if(h.fail)h.fail(e);else console.error(e);});};}});}' +
+    'window.google={script:{run:mk({})}};})();';
+
+  var HEAD_TAGS =
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+    '<meta name="apple-mobile-web-app-capable" content="yes">' +
+    '<meta name="mobile-web-app-capable" content="yes">' +
+    '<meta name="apple-mobile-web-app-title" content="My Diary">' +
+    '<meta name="theme-color" content="#FFFBF2">' +
+    '<link rel="apple-touch-icon" href="icon-180.png">' +
+    '<link rel="icon" type="image/png" href="icon-512.png">' +
+    '<title>My Diary</title>';
+
+  function render(html) {
+    var inject = HEAD_TAGS + '<script>' + SHIM + '<\/script>';
+    html = html.replace('<head>', function () { return '<head>' + inject; });
+    html = html.replace('<base target="_top">', '');
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  // ---- show the saved copy at once, then quietly fetch the newest one ----
+  var cached = lsGet('pos_page');
+  if (cached) {
+    render(cached);
+    post('__page').then(function (fresh) { if (fresh && fresh !== cached) lsSet('pos_page', fresh); })
+      .catch(function () {});
+  } else {
+    post('__page').then(function (fresh) {
+      lsSet('pos_page', fresh);
+      render(fresh);
+    }).catch(function (e) {
+      say('Could not open my diary.', (e && e.message ? e.message : '') + ' Check the internet and try again.');
+    });
+  }
+})();
+</script>
+</body>
+</html>
