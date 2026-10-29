@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>My Diary</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-512.png">
 <style>
-  html,body{margin:0;height:100%;background:#FFFBF2;color:#2B2560;font-family:system-ui,-apple-system,sans-serif}
+  html,body{touch-action:manipulation;margin:0;height:100%;background:#FFFBF2;color:#2B2560;font-family:system-ui,-apple-system,sans-serif}
   body{background-image:radial-gradient(rgba(43,37,96,.08) 1.2px,transparent 1.5px);background-size:20px 20px}
   #boot{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;box-sizing:border-box}
   #boot img{width:96px;height:96px;animation:bob 1.2s ease-in-out infinite}
@@ -80,7 +80,8 @@
     'window.google={script:{run:mk({})}};})();';
 
   var HEAD_TAGS =
-    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">' +
+    '<style>html,body,*{touch-action:manipulation}</style>' +
     '<meta name="apple-mobile-web-app-capable" content="yes">' +
     '<meta name="mobile-web-app-capable" content="yes">' +
     '<meta name="apple-mobile-web-app-title" content="My Diary">' +
@@ -90,6 +91,11 @@
     '<title>My Diary</title>';
 
   function render(html) {
+    // Wait until this small page has finished loading; otherwise the app gets added under the loading screen.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { render(html); }, 0); });
+      return;
+    }
     var inject = HEAD_TAGS + '<script>' + SHIM + '<\/script>';
     html = html.replace('<head>', function () { return '<head>' + inject; });
     html = html.replace('<base target="_top">', '');
