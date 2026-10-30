@@ -205,6 +205,7 @@ textarea.grow:focus{border-bottom:2px solid var(--accent)}
       <div class="field"><label>几点醒来</label><input type="time" id="d-wake"></div>
     </div>
     <label>为什么晚睡？</label><div class="chips" id="d-reason"></div>
+    <div class="field hidden" id="d-reasonbox"><textarea class="grow" rows="1" id="d-reason-other" placeholder="自己写原因"></textarea></div>
     <div class="field"><label>睡得怎么样？</label><textarea class="grow" rows="1" id="d-slept" placeholder="一句话就够"></textarea></div>
   </div>
   <div class="card">
@@ -220,8 +221,7 @@ textarea.grow:focus{border-bottom:2px solid var(--accent)}
     <div class="field"><label>运动（分钟）</label><input id="d-exercise" type="number" inputmode="numeric" min="0"></div>
   </div>
   <div class="card">
-    <h2>小确幸</h2>
-    <div class="hint">一杯好咖啡、一条暖心的消息、一次晒太阳的散步，什么都算。</div>
+    <h2>今日好事</h2>
     <div class="field"><textarea class="grow" rows="1" id="d-g1" placeholder="1."></textarea></div>
     <div class="field"><textarea class="grow" rows="1" id="d-g2" placeholder="2."></textarea></div>
     <div class="field"><textarea class="grow" rows="1" id="d-g3" placeholder="3."></textarea></div>
@@ -823,7 +823,7 @@ textarea.grow:focus{border-bottom:2px solid var(--accent)}
   /* 每个分页对应的数据：[字段, 表头] */
   var TABLES = [
     { name: '日记', key: 'diary', cols: [['date', '日期'], ['bed', '几点睡'], ['wake', '几点醒'], ['reason', '晚睡原因'], ['slept', '睡得怎样'],
-      ['felt', '心情'], ['ate', '吃了什么'], ['exercise', '运动分钟'], ['g1', '小确幸1'], ['g2', '小确幸2'], ['g3', '小确幸3'],
+      ['felt', '心情'], ['ate', '吃了什么'], ['exercise', '运动分钟'], ['g1', '今日好事1'], ['g2', '今日好事2'], ['g3', '今日好事3'],
       ['skill', '英语练了什么'], ['minutes', '英语分钟'], ['did', '英语做了什么'], ['words', '新单词']] },
     { name: '记账', key: 'spend', cols: [['date', '日期'], ['item', '买了什么'], ['category', '分类'], ['amount', '金额'], ['currency', '币种'], ['paidWith', '怎么付的'], ['notes', '备注']] },
     { name: '大件', key: 'big', cols: [['date', '日期'], ['item', '买了什么'], ['amount', '金额'], ['currency', '币种'], ['notes', '备注']] },
@@ -1292,11 +1292,30 @@ function setTimeField(id, v) {
   }
   $(id).value = t;
 }
+/* 晚睡原因：选「其他」就自己写 */
+var OTHER = '其他';
+function showReasonBox(on) { $('d-reasonbox').className = on ? 'field' : 'field hidden'; }
+function renderReason() {
+  var list = S.init.reasons || [];
+  var known = list.indexOf(S.reason) >= 0 && S.reason !== OTHER;
+  var sel = !S.reason ? '' : (known ? S.reason : OTHER);
+  $('d-reason-other').value = (!known && S.reason && S.reason !== OTHER) ? S.reason : '';
+  S.reasonPick = sel;
+  showReasonBox(sel === OTHER);
+  chips('d-reason', list, sel, function (v) {
+    S.reasonPick = v; showReasonBox(v === OTHER);
+    if (v === OTHER) $('d-reason-other').focus();
+  }, true);
+}
+function reasonValue() {
+  if (S.reasonPick === OTHER) return $('d-reason-other').value.trim() || OTHER;
+  return S.reasonPick || '';
+}
 function fillDiary(r) {
   setTimeField('d-bed', r.bed); setTimeField('d-wake', r.wake);
   DIARY_FIELDS.forEach(function (k) { $('d-' + k).value = r[k] == null ? '' : r[k]; });
   S.reason = r.reason || ''; S.skill = r.skill || '';
-  chips('d-reason', S.init.reasons, S.reason, function (v) { S.reason = v; }, true);
+  renderReason();
   chips('d-skill', SKILLS, S.skill, function (v) { S.skill = v; }, true);
   $('d-eng').open = !!(r.minutes || r.did || r.words);
 }
@@ -1313,7 +1332,7 @@ function loadDiary() {
 function saveDiary() {
   var day = $('d-date').value;
   if (S.loaded !== day) { toast('还在打开这一天，等一下'); return; }
-  var d = {date: day, bed: $('d-bed').value, wake: $('d-wake').value, reason: S.reason, skill: S.skill};
+  var d = {date: day, bed: $('d-bed').value, wake: $('d-wake').value, reason: reasonValue(), skill: S.skill};
   DIARY_FIELDS.forEach(function (k) { d[k] = $('d-' + k).value; });
   busy(true);
   call('api_saveDiary', [d], function () {
